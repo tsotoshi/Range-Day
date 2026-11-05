@@ -39,6 +39,15 @@ const STAGES = [
     targets:  [{ x: 330, y: 170 }, { x: 600, y: 150 }, { x: 870, y: 170 }],
     noShoots: [{ x: 662, y: 185 }],   // stands in front of the middle target
   },
+  {
+    name: 'Stage 3', title: 'Mixed Targets',
+    targets: [
+      { x: 330, y: 170 },
+      { x: 600, y: 150, tuxedo: true },   // black sides = hard cover
+      { x: 870, y: 215, scale: 0.6 },     // a smaller target (60% size)
+    ],
+    noShoots: [{ x: 268, y: 205 }],       // stands in front of target 1
+  },
 ];
 const LAMPS = [330, 600, 870];  // left/right position of the overhead lights
 
@@ -58,6 +67,10 @@ const SHAPE = {
   bodyD: [[-6, 6], [6, 6], [9, 9], [9, 27], [6, 30], [-6, 30], [-9, 27], [-9, 9]],
   bodyC: [[-4.5, 7.5], [4.5, 7.5], [6, 9], [6, 24], [4.5, 25.5], [-4.5, 25.5], [-6, 24], [-6, 9]],
   bodyA: [[-3, 8.5], [3, 8.5], [3, 19.5], [-3, 19.5]],
+  // A "tuxedo" target has both sides painted black, leaving a strip down
+  // the middle. Black paint means hard cover: it stops the bullet.
+  tuxLeft:  [[-10, 6], [-4, 6], [-4, 31], [-10, 31]],
+  tuxRight: [[4, 6], [10, 6], [10, 31], [4, 31]],
 };
 
 
@@ -158,7 +171,12 @@ function fireShot(x, y) {
   // cover", so the bullet can hit it AND the target behind it.
   const hitNoShoot = stage.noShoots.some(ns => zoneAt(ns, x, y));
 
-  shots.push({ x, y, onTarget: !!hit || hitNoShoot });
+  // Black paint on a tuxedo target is hard cover: the bullet stops there,
+  // so it doesn't score.
+  const hitHardCover = !!hit && hit.zone === 'HC';
+  if (hitHardCover) hit = null;
+
+  shots.push({ x, y, onTarget: !!hit || hitNoShoot || hitHardCover });
 
   if (hitNoShoot) {
     noShootHits++;
@@ -169,6 +187,9 @@ function fireShot(x, y) {
     hits[hit.target].push(hit.zone);
     playHit();
     addPopup(x, y, `${hit.zone} +${POINTS[hit.zone]}`, ZONE_COLORS[hit.zone]);
+  } else if (hitHardCover) {
+    playHit();
+    addPopup(x, y, 'HARD COVER', '#eef1f4');
   } else if (!hitNoShoot) {
     addPopup(x, y, 'MISS', ZONE_COLORS.M);
   }
@@ -184,15 +205,22 @@ function finishStage() {
   setTimeout(showResults, 900);      // short pause so you can see your last hole
 }
 
-// Returns 'A', 'C', 'D' or null for a click at screen position (px, py).
+// Returns 'A', 'C', 'D', 'HC' (hard cover) or null for a click at (px, py).
 function zoneAt(target, px, py) {
   // Turn screen pixels into inches measured from this target's head.
-  const x = (px - target.x) / PX;
-  const y = (py - target.y) / PX;
-  if (inside(x, y, SHAPE.bodyA) || inside(x, y, SHAPE.headA)) return 'A';
-  if (inside(x, y, SHAPE.bodyC) || inside(x, y, SHAPE.head))  return 'C'; // head "B" zone scores like C
-  if (inside(x, y, SHAPE.bodyD)) return 'D';
-  return null;
+  // A smaller target (scale below 1) has fewer pixels per inch.
+  const size = PX * (target.scale || 1);
+  const x = (px - target.x) / size;
+  const y = (py - target.y) / size;
+
+  let zone = null;
+  if (inside(x, y, SHAPE.bodyA) || inside(x, y, SHAPE.headA))      zone = 'A';
+  else if (inside(x, y, SHAPE.bodyC) || inside(x, y, SHAPE.head))  zone = 'C'; // head "B" zone scores like C
+  else if (inside(x, y, SHAPE.bodyD))                              zone = 'D';
+
+  const onBlackPaint = inside(x, y, SHAPE.tuxLeft) || inside(x, y, SHAPE.tuxRight);
+  if (zone && target.tuxedo && onBlackPaint) return 'HC';
+  return zone;
 }
 
 // Classic "is this point inside this shape?" test (ray casting).
@@ -498,7 +526,8 @@ function buildBackground() {
 // Trace a target shape (in inches) onto the canvas at a target's position.
 function tracePoly(points, t) {
   points.forEach(([ix, iy], i) => {
-    const x = t.x + ix * PX, y = t.y + iy * PX;
+    const size = PX * (t.scale || 1);
+    const x = t.x + ix * size, y = t.y + iy * size;
     if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
   });
   ctx.closePath();
@@ -506,24 +535,26 @@ function tracePoly(points, t) {
 
 // Draws one target. white = true draws a white no-shoot instead of cardboard.
 function drawTarget(t, white = false) {
+  const scale = t.scale || 1;
+  const P = PX * scale;          // pixels per inch for THIS target
   // Wooden stand sticks and floor shadow
-  const standTop = t.y + 24 * PX, standBottom = 505;
+  const standTop = t.y + 24 * P, standBottom = 505;
   ctx.fillStyle = 'rgba(0,0,0,0.45)';
   ctx.beginPath();
-  ctx.ellipse(t.x, standBottom, 95, 9, 0, 0, Math.PI * 2);
+  ctx.ellipse(t.x, standBottom, 95 * scale, 9, 0, 0, Math.PI * 2);
   ctx.fill();
   for (const side of [-5, 5]) {
-    const sx = t.x + side * PX;
+    const sx = t.x + side * P;
     ctx.fillStyle = '#8b6a42';
     ctx.fillRect(sx - 5, standTop, 10, standBottom - standTop);
     ctx.fillStyle = 'rgba(0,0,0,0.25)';
     ctx.fillRect(sx + 2, standTop, 3, standBottom - standTop);
   }
   ctx.fillStyle = '#2a2622';
-  ctx.fillRect(t.x - 70, standBottom - 8, 140, 10);
+  ctx.fillRect(t.x - 70 * scale, standBottom - 8, 140 * scale, 10);
 
   // Cardboard (head + body), with a soft drop shadow
-  const grad = ctx.createLinearGradient(0, t.y, 0, t.y + 30 * PX);
+  const grad = ctx.createLinearGradient(0, t.y, 0, t.y + 30 * P);
   grad.addColorStop(0, white ? '#f6f4ee' : '#dbb684');
   grad.addColorStop(1, white ? '#d6d2c8' : '#b38957');
   ctx.save();
@@ -544,8 +575,8 @@ function drawTarget(t, white = false) {
   tracePoly(SHAPE.bodyD, t);
   ctx.clip();
   ctx.strokeStyle = white ? 'rgba(0,0,0,0.04)' : 'rgba(90,60,25,0.07)';
-  for (let x = t.x - 9 * PX; x < t.x + 9 * PX; x += 4) {
-    ctx.beginPath(); ctx.moveTo(x, t.y); ctx.lineTo(x, t.y + 30 * PX); ctx.stroke();
+  for (let x = t.x - 9 * P; x < t.x + 9 * P; x += 4) {
+    ctx.beginPath(); ctx.moveTo(x, t.y); ctx.lineTo(x, t.y + 30 * P); ctx.stroke();
   }
   ctx.restore();
 
@@ -569,18 +600,35 @@ function drawTarget(t, white = false) {
   }
   ctx.restore();
 
+  // Tuxedo: paint both sides black (clipped to the target's outline)
+  if (t.tuxedo) {
+    ctx.save();
+    ctx.beginPath();
+    tracePoly(SHAPE.head, t);
+    tracePoly(SHAPE.bodyD, t);
+    ctx.clip();
+    ctx.fillStyle = '#141414';
+    ctx.beginPath();
+    tracePoly(SHAPE.tuxLeft, t);
+    tracePoly(SHAPE.tuxRight, t);
+    ctx.fill();
+    ctx.restore();
+  }
+
   // Faint zone letters (no-shoots don't get them)
   if (white) return;
   ctx.fillStyle = 'rgba(85,55,25,0.4)';
-  ctx.font = 'bold 15px -apple-system, Helvetica, Arial, sans-serif';
+  ctx.font = `bold ${Math.round(15 * scale)}px -apple-system, Helvetica, Arial, sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText('A', t.x, t.y + 14 * PX);
-  ctx.fillText('C', t.x, t.y + 22.5 * PX);
-  ctx.fillText('D', t.x - 7.5 * PX, t.y + 18 * PX);
-  ctx.fillText('D', t.x + 7.5 * PX, t.y + 18 * PX);
-  ctx.font = 'bold 11px -apple-system, Helvetica, Arial, sans-serif';
-  ctx.fillText('A', t.x, t.y + 2.5 * PX);
+  ctx.fillText('A', t.x, t.y + 14 * P);
+  ctx.fillText('C', t.x, t.y + 22.5 * P);
+  if (!t.tuxedo) {               // on a tuxedo the D sides are painted over
+    ctx.fillText('D', t.x - 7.5 * P, t.y + 18 * P);
+    ctx.fillText('D', t.x + 7.5 * P, t.y + 18 * P);
+  }
+  ctx.font = `bold ${Math.round(11 * scale)}px -apple-system, Helvetica, Arial, sans-serif`;
+  ctx.fillText('A', t.x, t.y + 2.5 * P);
 }
 
 function drawHoles() {

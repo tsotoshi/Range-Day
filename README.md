@@ -2,6 +2,7 @@
 
 A small browser game. Pick a stage, wait for the beep, and put two hits on each of
 three cardboard targets as fast as you can. Stage 2 adds a white no-shoot target.
+Stage 3 has a no-shoot, a tuxedo target (black paint = hard cover) and a small target.
 
 Play it online: https://tsotoshi.github.io/Range-Day/
 
@@ -51,5 +52,9 @@ right-click the page, choose **Inspect**, then open the **Console** tab.
 - Each missing hit = −10 penalty
 - Each hit on a white no-shoot = −10 penalty. A shot can go through the no-shoot
   and still score on the target behind it (a no-shoot isn't hard cover)
+- Hits on black paint (a tuxedo target) are hard cover: they don't score and
+  don't count toward your two hits
+- Targets can be made bigger or smaller with `scale` (Stage 3 uses `scale: 0.6`)
+  and painted as a tuxedo with `tuxedo: true`
 - Time runs from the beep to your last shot
 - **Hit factor = (points − penalties) ÷ time**. Higher is better. Each stage's best is saved in this browser.
