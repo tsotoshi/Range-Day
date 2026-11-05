@@ -1,7 +1,9 @@
 # Range Day: a USPSA-style shooting game
 
-A small browser game. Press Start, wait for the beep, and put two hits on each of
-three cardboard targets as fast as you can.
+A small browser game. Pick a stage, wait for the beep, and put two hits on each of
+three cardboard targets as fast as you can. Stage 2 adds a white no-shoot target.
+
+Play it online: https://tsotoshi.github.io/range-day/
 
 ## What each file does
 
@@ -34,8 +36,9 @@ You don't need to install anything or connect to the internet.
 - `ROUNDS_PER_STAGE = 10` → give yourself more or fewer bullets.
 - `POINTS = { A: 5, C: 3, D: 1 }` → change what each zone is worth.
 - `MIN_DELAY` / `MAX_DELAY` → change how long you wait for the beep.
-- `TARGETS` → move a target by changing its `x` (left/right) or `y` (up/down),
-  or add a fourth one: `{ x: 1050, y: 180 },`
+- `STAGES` → each stage lists its `targets` and `noShoots`. Move one by changing
+  its `x` (left/right) or `y` (up/down). To make a Stage 3, copy a stage block,
+  change its name and positions, then add a matching button in `index.html`.
 - In `style.css`, change `--accent: #ff7a1a;` to another colour.
 
 If something breaks, undo your change (⌘ + Z) and save again. To see error messages,
@@ -46,5 +49,7 @@ right-click the page, choose **Inspect**, then open the **Console** tab.
 - A = 5, C = 3, D = 1 (the head's outer "B" area counts as C)
 - Only the best 2 hits on each target count
 - Each missing hit = −10 penalty
+- Each hit on a white no-shoot = −10 penalty. A shot can go through the no-shoot
+  and still score on the target behind it (a no-shoot isn't hard cover)
 - Time runs from the beep to your last shot
-- **Hit factor = (points − penalties) ÷ time**. Higher is better. Your best is saved in this browser.
+- **Hit factor = (points − penalties) ÷ time**. Higher is better. Each stage's best is saved in this browser.

@@ -214,3 +214,19 @@ td { padding: 6px 4px; border-top: 1px solid var(--line); }
   .chip { width: 20px; height: 20px; font-size: 11px; }
   .best { font-size: 13px; margin-bottom: 8px; }
 }
+
+/* ---------- Stage buttons and the no-shoot chip ---------- */
+.buttons { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+.buttons button { padding: 12px 26px; }
+button small {
+  display: block; margin-top: 2px;
+  font-size: 11px; font-weight: 600; letter-spacing: 0.04em;
+  text-transform: none; opacity: 0.75;
+}
+button.secondary { background: transparent; color: var(--text); border: 1px solid var(--line); }
+.chip-NS { background: #f4f2ec; width: auto; padding: 0 5px; }
+
+@media (max-height: 500px) {
+  .buttons button { padding: 8px 20px; }
+}
+.legend .item { white-space: nowrap; }

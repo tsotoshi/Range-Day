@@ -23,12 +23,24 @@ const POINTS = { A: 5, C: 3, D: 1 };  // points for each scoring zone
 const MIN_DELAY = 1.5;         // shortest wait (seconds) before the beep
 const MAX_DELAY = 3.5;         // longest wait (seconds) before the beep
 
-// Where the three targets stand (x = left/right, y = up/down, in pixels).
-const TARGETS = [
-  { x: 330, y: 170 },
-  { x: 600, y: 150 },
-  { x: 870, y: 170 },
+const NO_SHOOT_PENALTY = 10;   // points lost for each hit on a white no-shoot
+
+// The stages. Each one lists where its targets stand (x = left/right,
+// y = up/down, in pixels) and any white no-shoot targets you must NOT hit.
+// To make a new stage, copy one of these blocks and change the numbers.
+const STAGES = [
+  {
+    name: 'Stage 1', title: 'Three Targets',
+    targets:  [{ x: 330, y: 170 }, { x: 600, y: 150 }, { x: 870, y: 170 }],
+    noShoots: [],
+  },
+  {
+    name: 'Stage 2', title: 'No-Shoot',
+    targets:  [{ x: 330, y: 170 }, { x: 600, y: 150 }, { x: 870, y: 170 }],
+    noShoots: [{ x: 662, y: 185 }],   // stands in front of the middle target
+  },
 ];
+const LAMPS = [330, 600, 870];  // left/right position of the overhead lights
 
 const W = 1200, H = 700;   // size of the scene we draw
 const FLOOR_Y = 460;       // where the back wall meets the floor
@@ -72,9 +84,12 @@ ctx.scale(dpr, dpr);
 /* ---------------------------------------------------------------------
    4. GAME STATE: what the game remembers right now
    --------------------------------------------------------------------- */
+let stageIndex = 0;        // which stage is being played (0 = Stage 1)
+let stage = STAGES[0];
 let state = 'ready';      // 'ready' → 'standby' → 'running' → 'done'
 let shots = [];           // every bullet hole: { x, y, onTarget }
 let hits = [];            // for each target, a list of zones hit, e.g. ['A','C']
+let noShootHits = 0;      // how many times you hit a no-shoot
 let popups = [];          // floating "A +5" labels
 let roundsLeft = ROUNDS_PER_STAGE;
 let startTime = 0;        // moment the beep sounded
@@ -87,7 +102,8 @@ const mouse = { x: W / 2, y: H / 2, inside: false };
 
 function resetStage() {
   shots = [];
-  hits = TARGETS.map(() => []);
+  hits = stage.targets.map(() => []);
+  noShootHits = 0;
   popups = [];
   roundsLeft = ROUNDS_PER_STAGE;
   startTime = lastShotTime = finalTime = 0;
@@ -97,6 +113,13 @@ function resetStage() {
 /* ---------------------------------------------------------------------
    5. STARTING, SHOOTING AND FINISHING
    --------------------------------------------------------------------- */
+function chooseStage(i) {
+  stageIndex = i;
+  stage = STAGES[i];
+  document.getElementById('stage-label').textContent = `${stage.name} · ${stage.title}`;
+  startStage();
+}
+
 function startStage() {
   initAudio();                       // browsers only allow sound after a click
   resetStage();
@@ -126,18 +149,27 @@ function fireShot(x, y) {
 
   // Which target (if any) and which zone did we hit?
   let hit = null;
-  TARGETS.forEach((t, i) => {
+  stage.targets.forEach((t, i) => {
     const zone = zoneAt(t, x, y);
     if (zone && !hit) hit = { target: i, zone };
   });
 
-  shots.push({ x, y, onTarget: !!hit });
+  // Did the bullet go through a white no-shoot? A no-shoot is not "hard
+  // cover", so the bullet can hit it AND the target behind it.
+  const hitNoShoot = stage.noShoots.some(ns => zoneAt(ns, x, y));
 
+  shots.push({ x, y, onTarget: !!hit || hitNoShoot });
+
+  if (hitNoShoot) {
+    noShootHits++;
+    playNoShoot();
+    addPopup(x, y - 26, `NO-SHOOT −${NO_SHOOT_PENALTY}`, ZONE_COLORS.M);
+  }
   if (hit) {
     hits[hit.target].push(hit.zone);
     playHit();
     addPopup(x, y, `${hit.zone} +${POINTS[hit.zone]}`, ZONE_COLORS[hit.zone]);
-  } else {
+  } else if (!hitNoShoot) {
     addPopup(x, y, 'MISS', ZONE_COLORS.M);
   }
 
@@ -198,16 +230,24 @@ function showResults() {
              <td>${r.misses ? '−' + r.misses * MISS_PENALTY : '0'}</td></tr>`;
   });
 
-  const penalties = totalMisses * MISS_PENALTY;
+  if (stage.noShoots.length) {
+    const chips = '<span class="chip chip-NS">NS</span>'.repeat(noShootHits) || '—';
+    rows += `<tr><td>No-shoot</td><td>${chips}</td><td>—</td>
+             <td>${noShootHits ? '−' + noShootHits * NO_SHOOT_PENALTY : '0'}</td></tr>`;
+  }
+
+  const penalties = totalMisses * MISS_PENALTY + noShootHits * NO_SHOOT_PENALTY;
   const score = Math.max(0, totalPoints - penalties);       // can't go below zero
   const hitFactor = finalTime > 0 ? score / finalTime : 0;
 
   // Remember your best hit factor in this browser.
+  // Each stage keeps its own personal best.
+  const bestKey = stageIndex === 0 ? 'rangeDayBestHF' : 'rangeDayBestHF-' + stageIndex;
   let best = 0;
-  try { best = parseFloat(localStorage.getItem('rangeDayBestHF')) || 0; } catch (e) {}
+  try { best = parseFloat(localStorage.getItem(bestKey)) || 0; } catch (e) {}
   const isNewBest = hitFactor > best;
   if (isNewBest) {
-    try { localStorage.setItem('rangeDayBestHF', hitFactor); } catch (e) {}
+    try { localStorage.setItem(bestKey, hitFactor); } catch (e) {}
   }
 
   resultsEl.innerHTML = `
@@ -226,6 +266,7 @@ function showResults() {
       ${isNewBest ? '★ New personal best!' : `Personal best: ${best.toFixed(4)}`}
     </p>`;
 
+  document.querySelector('#results-screen h2').textContent = `${stage.name} Complete`;
   resultsScreen.classList.remove('hidden');
   playBeep(0.15, 1200);
 }
@@ -318,6 +359,22 @@ function playGunshot() {
   thump.stop(t + 0.25);
 }
 
+// A low buzzer for hitting a no-shoot.
+function playNoShoot() {
+  if (!audio) return;
+  const t = audio.currentTime + 0.05;
+  const osc = audio.createOscillator();
+  const g = audio.createGain();
+  osc.type = 'sawtooth';
+  osc.frequency.value = 140;
+  g.gain.setValueAtTime(0.2, t);
+  g.gain.setValueAtTime(0.2, t + 0.25);
+  g.gain.linearRampToValueAtTime(0, t + 0.3);
+  osc.connect(g).connect(master);
+  osc.start(t);
+  osc.stop(t + 0.3);
+}
+
 // A soft "thwap" of a bullet punching cardboard.
 function playHit() {
   if (!audio) return;
@@ -406,19 +463,19 @@ function buildBackground() {
   }
 
   // Overhead lamps and the warm light they throw
-  for (const t of TARGETS) {
-    const glow = g.createRadialGradient(t.x, 90, 10, t.x, 260, 330);
+  for (const lampX of LAMPS) {
+    const glow = g.createRadialGradient(lampX, 90, 10, lampX, 260, 330);
     glow.addColorStop(0, 'rgba(255,232,190,0.32)');
     glow.addColorStop(1, 'rgba(255,232,190,0)');
     g.fillStyle = glow;
-    g.fillRect(t.x - 400, 80, 800, H - 80);
+    g.fillRect(lampX - 400, 80, 800, H - 80);
 
     g.fillStyle = '#3d3d42';
-    g.fillRect(t.x - 52, 72, 104, 8);
+    g.fillRect(lampX - 52, 72, 104, 8);
     g.shadowColor = 'rgba(255,240,200,1)';
     g.shadowBlur = 30;
     g.fillStyle = '#fff4dc';
-    g.fillRect(t.x - 46, 79, 92, 4);
+    g.fillRect(lampX - 46, 79, 92, 4);
     g.shadowBlur = 0;
   }
 
@@ -447,7 +504,8 @@ function tracePoly(points, t) {
   ctx.closePath();
 }
 
-function drawTarget(t) {
+// Draws one target. white = true draws a white no-shoot instead of cardboard.
+function drawTarget(t, white = false) {
   // Wooden stand sticks and floor shadow
   const standTop = t.y + 24 * PX, standBottom = 505;
   ctx.fillStyle = 'rgba(0,0,0,0.45)';
@@ -466,8 +524,8 @@ function drawTarget(t) {
 
   // Cardboard (head + body), with a soft drop shadow
   const grad = ctx.createLinearGradient(0, t.y, 0, t.y + 30 * PX);
-  grad.addColorStop(0, '#dbb684');
-  grad.addColorStop(1, '#b38957');
+  grad.addColorStop(0, white ? '#f6f4ee' : '#dbb684');
+  grad.addColorStop(1, white ? '#d6d2c8' : '#b38957');
   ctx.save();
   ctx.shadowColor = 'rgba(0,0,0,0.55)';
   ctx.shadowBlur = 24;
@@ -485,14 +543,14 @@ function drawTarget(t) {
   tracePoly(SHAPE.head, t);
   tracePoly(SHAPE.bodyD, t);
   ctx.clip();
-  ctx.strokeStyle = 'rgba(90,60,25,0.07)';
+  ctx.strokeStyle = white ? 'rgba(0,0,0,0.04)' : 'rgba(90,60,25,0.07)';
   for (let x = t.x - 9 * PX; x < t.x + 9 * PX; x += 4) {
     ctx.beginPath(); ctx.moveTo(x, t.y); ctx.lineTo(x, t.y + 30 * PX); ctx.stroke();
   }
   ctx.restore();
 
   // Outline
-  ctx.strokeStyle = 'rgba(80,50,20,0.7)';
+  ctx.strokeStyle = white ? 'rgba(90,90,90,0.6)' : 'rgba(80,50,20,0.7)';
   ctx.lineWidth = 1.5;
   ctx.beginPath();
   tracePoly(SHAPE.head, t);
@@ -502,7 +560,7 @@ function drawTarget(t) {
   // Dotted "perforated" scoring-zone lines
   ctx.save();
   ctx.setLineDash([4, 3]);
-  ctx.strokeStyle = 'rgba(85,55,25,0.65)';
+  ctx.strokeStyle = white ? 'rgba(120,120,120,0.5)' : 'rgba(85,55,25,0.65)';
   ctx.lineWidth = 1.2;
   for (const zone of [SHAPE.headA, SHAPE.bodyC, SHAPE.bodyA]) {
     ctx.beginPath();
@@ -511,7 +569,8 @@ function drawTarget(t) {
   }
   ctx.restore();
 
-  // Faint zone letters
+  // Faint zone letters (no-shoots don't get them)
+  if (white) return;
   ctx.fillStyle = 'rgba(85,55,25,0.4)';
   ctx.font = 'bold 15px -apple-system, Helvetica, Arial, sans-serif';
   ctx.textAlign = 'center';
@@ -602,7 +661,8 @@ function updateHud(now) {
    --------------------------------------------------------------------- */
 function loop(now) {
   ctx.drawImage(background, 0, 0, W, H);
-  TARGETS.forEach(drawTarget);
+  stage.targets.forEach(t => drawTarget(t));
+  stage.noShoots.forEach(ns => drawTarget(ns, true));   // in front of the targets
   drawHoles();
   drawPopups(now);
 
@@ -646,7 +706,15 @@ canvas.addEventListener('pointerdown', e => {
   if (state === 'running') fireShot(mouse.x, mouse.y);
 });
 
-document.getElementById('start-btn').addEventListener('click', startStage);
+// Each stage button on the start screen has data-stage="0", "1", ...
+document.querySelectorAll('[data-stage]').forEach(btn =>
+  btn.addEventListener('click', () => chooseStage(Number(btn.dataset.stage))));
+document.getElementById('menu-btn').addEventListener('click', () => {
+  state = 'ready';
+  resetStage();
+  resultsScreen.classList.add('hidden');
+  startScreen.classList.remove('hidden');
+});
 document.getElementById('restart-btn').addEventListener('click', startStage);
 
 resetStage();

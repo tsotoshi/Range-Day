@@ -15,7 +15,7 @@
 
   <!-- Top bar: game name + shot-timer style readouts -->
   <header class="hud">
-    <div class="brand">RANGE DAY <span>Stage 1 · Three Targets · 2 hits each</span></div>
+    <div class="brand">RANGE DAY <span id="stage-label">Stage 1 · Three Targets</span></div>
     <div class="readouts">
       <div class="readout"><label>TIME</label><span id="timer">0.00</span></div>
       <div class="readout"><label>ROUNDS</label><span id="rounds">10</span></div>
@@ -35,18 +35,23 @@
         <h1>Range Day</h1>
         <p class="lead">Put <strong>two hits on each of the three targets</strong> as fast and as accurately as you can.</p>
         <ul class="rules">
-          <li>Press <strong>Start</strong>, wait for the <strong>beep</strong>, then shoot.</li>
+          <li>Pick a stage, wait for the <strong>beep</strong>, then shoot.</li>
           <li>Aim with your mouse and click to fire, or tap a target on a phone.</li>
           <li>You have 10 rounds. Only the best 2 hits on each target count.</li>
+          <li>Stage 2 adds a white <strong>no-shoot</strong> in front of the middle target. Don't hit it!</li>
         </ul>
         <div class="legend">
-          <span class="chip chip-A">A</span> 5 pts
-          <span class="chip chip-C">C</span> 3 pts
-          <span class="chip chip-D">D</span> 1 pt
-          <span class="chip chip-M">M</span> Miss −10
+          <span class="item"><span class="chip chip-A">A</span> 5 pts</span>
+          <span class="item"><span class="chip chip-C">C</span> 3 pts</span>
+          <span class="item"><span class="chip chip-D">D</span> 1 pt</span>
+          <span class="item"><span class="chip chip-M">M</span> Miss −10</span>
+          <span class="item"><span class="chip chip-NS">NS</span> No-shoot −10</span>
         </div>
         <p class="small">Hit factor = points ÷ seconds. Higher is better.</p>
-        <button id="start-btn">Start</button>
+        <div class="buttons">
+          <button data-stage="0">Stage 1<small>Three Targets</small></button>
+          <button data-stage="1">Stage 2<small>No-Shoot</small></button>
+        </div>
       </div>
     </div>
 
@@ -55,7 +60,10 @@
       <div class="panel">
         <h2>Stage Complete</h2>
         <div id="results"></div>
-        <button id="restart-btn">Restart</button>
+        <div class="buttons">
+          <button id="restart-btn">Restart</button>
+          <button id="menu-btn" class="secondary">Change Stage</button>
+        </div>
       </div>
     </div>
   </main>
