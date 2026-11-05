@@ -3,7 +3,7 @@
 A small browser game. Pick a stage, wait for the beep, and put two hits on each of
 three cardboard targets as fast as you can. Stage 2 adds a white no-shoot target.
 
-Play it online: https://tsotoshi.github.io/range-day/
+Play it online: https://tsotoshi.github.io/Range-Day/
 
 ## What each file does
 
