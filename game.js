@@ -69,8 +69,10 @@ const SHAPE = {
   bodyA: [[-3, 8.5], [3, 8.5], [3, 19.5], [-3, 19.5]],
   // A "tuxedo" target has both sides painted black, leaving a strip down
   // the middle. Black paint means hard cover: it stops the bullet.
-  tuxLeft:  [[-10, 6], [-4, 6], [-4, 31], [-10, 31]],
-  tuxRight: [[4, 6], [10, 6], [10, 31], [4, 31]],
+  // The strip is 6 inches wide (x from -3 to 3), the same width as the A zone.
+  // Change the 3s to make it wider or tighter.
+  tuxLeft:  [[-10, 6], [-3, 6], [-3, 31], [-10, 31]],
+  tuxRight: [[3, 6], [10, 6], [10, 31], [3, 31]],
 };
 
 
