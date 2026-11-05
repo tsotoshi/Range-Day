@@ -237,3 +237,17 @@ button.secondary { background: transparent; color: var(--text); border: 1px soli
   .buttons button { padding: 10px 12px; font-size: 15px; letter-spacing: 0.06em; flex: 1; }
   .small { display: none; }
 }
+
+/* Phone held sideways: shrink the top bar and fit the whole range on screen */
+@media (max-height: 500px) {
+  body { padding-block: 6px; }
+  .hud { margin-bottom: 6px; }
+  .brand { font-size: 15px; }
+  .brand span { display: none; }
+  .readout { padding: 2px 10px; min-width: 80px; }
+  .readout span { font-size: 18px; }
+  .readout label { font-size: 8px; }
+  .stage-wrap { width: min(100%, calc((100vh - 64px) * 12 / 7)); }
+  .stage-wrap { width: min(100%, calc((100dvh - 64px) * 12 / 7)); }
+  .footer { display: none; }
+}

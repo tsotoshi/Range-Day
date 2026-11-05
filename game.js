@@ -23,6 +23,13 @@ const POINTS = { A: 5, C: 3, D: 1 };  // points for each scoring zone
 const MIN_DELAY = 1.5;         // shortest wait (seconds) before the beep
 const MAX_DELAY = 3.5;         // longest wait (seconds) before the beep
 
+// The 2011 pistol at the bottom of the screen
+const GUN_SIZE   = 1.6;        // make the gun bigger or smaller
+const HAND_COLOR = '#c8926c';  // skin tone of the hands
+const HAND_LIGHT = '#dcaa86';  // highlight
+const HAND_SHADE = '#9c6b4b';  // shadow
+const SLEEVE_COLOR = '#2c3440'; // shirt sleeves
+
 const NO_SHOOT_PENALTY = 10;   // points lost for each hit on a white no-shoot
 
 // The stages. Each one lists where its targets stand (x = left/right,
@@ -161,6 +168,9 @@ function fireShot(x, y) {
   playGunshot();
   flash = 1;
   recoil = 1;
+  gun.kick = 1;
+  ejectBrass();
+  playBrass();
 
   // Which target (if any) and which zone did we hit?
   let hit = null;
@@ -403,6 +413,22 @@ function playNoShoot() {
   osc.connect(g).connect(master);
   osc.start(t);
   osc.stop(t + 0.3);
+}
+
+// Two little "tinks" as the empty case lands on the floor.
+function playBrass() {
+  if (!audio) return;
+  for (const [delay, pitch] of [[0.5, 3800], [0.62, 4700]]) {
+    const t = audio.currentTime + delay + Math.random() * 0.05;
+    const osc = audio.createOscillator();
+    const g = audio.createGain();
+    osc.frequency.value = pitch;
+    g.gain.setValueAtTime(0.05, t);
+    g.gain.exponentialRampToValueAtTime(0.0005, t + 0.12);
+    osc.connect(g).connect(master);
+    osc.start(t);
+    osc.stop(t + 0.13);
+  }
 }
 
 // A soft "thwap" of a bullet punching cardboard.
@@ -707,6 +733,223 @@ function updateHud(now) {
 
 
 /* ---------------------------------------------------------------------
+   8b. THE 2011 PISTOL
+   Drawn in code, seen from behind as if you're holding it. Every shape
+   below is measured in pixels from the top of the front sight, then
+   the whole drawing is moved to the gun's position and scaled up.
+   --------------------------------------------------------------------- */
+const gun = { x: W / 2, y: 520, kick: 0 };   // kick: 1 right after a shot → 0
+let brass = [];                               // flying empty cases
+
+function updateGun() {
+  // Follow the aim, a little behind it so the gun feels heavy.
+  const aimY = Math.min(Math.max(mouse.y + 170, 440), 560);
+  gun.x += (mouse.x - gun.x) * 0.3;
+  gun.y += (aimY - gun.y) * 0.3;
+  gun.kick *= 0.82;
+}
+
+function fillPoly(points) {
+  ctx.beginPath();
+  points.forEach(([x, y], i) => (i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)));
+  ctx.closePath();
+  ctx.fill();
+}
+
+function roundRect(x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+// A rounded, softly shaded shape for hands and thumbs.
+function skin(cx, cy, rx, ry, rotation, dark) {
+  const g = ctx.createRadialGradient(cx - rx * 0.3, cy - ry * 0.4, 2, cx, cy, Math.max(rx, ry));
+  g.addColorStop(0, HAND_LIGHT);
+  g.addColorStop(1, dark ? HAND_SHADE : HAND_COLOR);
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, rx, ry, rotation, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(60,30,15,0.35)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+}
+
+function drawGun() {
+  ctx.save();
+  ctx.translate(gun.x, gun.y - gun.kick * 45);                         // recoil lifts the gun
+  ctx.rotate(((gun.x - W / 2) / W) * 0.12 - gun.kick * 0.08);          // slight tilt
+  ctx.scale(GUN_SIZE, GUN_SIZE);
+
+  // Muzzle flash, out past the front of the gun (drawn first, so it's behind)
+  if (gun.kick > 0.55) {
+    const f = 0.6 + 0.4 * (gun.kick - 0.55) / 0.45;
+    const g = ctx.createRadialGradient(0, -28, 0, 0, -28, 80 * f);
+    g.addColorStop(0, 'rgba(255,255,230,0.95)');
+    g.addColorStop(0.3, 'rgba(255,200,90,0.8)');
+    g.addColorStop(1, 'rgba(255,120,20,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.ellipse(0, -40, 50 * f, 85 * f, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Forearms reaching down to the bottom corners, with shirt sleeves
+  for (const arm of [
+    [[-56, 160], [-12, 170], [-80, 440], [-270, 440]],    // left arm
+    [[-8, 166], [40, 158], [240, 440], [50, 440]],        // right arm
+  ]) {
+    const g = ctx.createLinearGradient(0, 160, 0, 360);
+    g.addColorStop(0, HAND_COLOR);
+    g.addColorStop(1, HAND_SHADE);
+    ctx.fillStyle = g;
+    fillPoly(arm);
+    ctx.save();
+    ctx.beginPath();
+    arm.forEach(([x, y], i) => (i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)));
+    ctx.clip();
+    ctx.fillStyle = SLEEVE_COLOR;
+    ctx.fillRect(-400, 330, 800, 200);
+    ctx.restore();
+  }
+
+  // Slide: the top surface catches the light, the back face is darker
+  ctx.fillStyle = '#4b4e54';
+  fillPoly([[-27, 2], [27, 2], [31, 9], [-31, 9]]);
+  const steel = ctx.createLinearGradient(0, 8, 0, 60);
+  steel.addColorStop(0, '#35383d');
+  steel.addColorStop(1, '#18191c');
+  ctx.fillStyle = steel;
+  roundRect(-31, 8, 62, 52, 5);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.06)';                           // rear serrations
+  ctx.lineWidth = 1;
+  for (let y = 14; y < 56; y += 3.5) {
+    ctx.beginPath(); ctx.moveTo(-26, y); ctx.lineTo(26, y); ctx.stroke();
+  }
+  ctx.fillStyle = '#2a2c30';                                             // firing-pin stop
+  roundRect(-8, 22, 16, 28, 3);
+  ctx.fill();
+
+  // Front sight (far away, seen through the rear notch) with a red fiber-optic dot
+  ctx.fillStyle = '#101112';
+  ctx.fillRect(-3, -6, 6, 10);
+  ctx.save();
+  ctx.shadowColor = '#ff2a2a';
+  ctx.shadowBlur = 8;
+  ctx.fillStyle = '#ff4a3a';
+  circle(0, -3, 2.3);
+  ctx.restore();
+
+  // Rear sight: a black block with a square notch
+  ctx.fillStyle = '#0d0e0f';
+  fillPoly([[-23, -6], [-5.5, -6], [-5.5, 4], [5.5, 4], [5.5, -6], [23, -6], [24, 10], [-24, 10]]);
+
+  // Frame under the slide, cocked hammer, and the big 2011 beavertail
+  ctx.fillStyle = '#1f2023';
+  ctx.fillRect(-26, 58, 52, 12);
+  ctx.fillStyle = '#3c3f44';
+  roundRect(-7, 48, 14, 16, 3);
+  ctx.fill();
+  ctx.fillStyle = '#1a1b1e';
+  circle(0, 54, 2.6);
+  const bt = ctx.createLinearGradient(0, 62, 0, 90);
+  bt.addColorStop(0, '#5a5d63');
+  bt.addColorStop(1, '#2a2b2f');
+  ctx.fillStyle = bt;
+  ctx.beginPath();
+  ctx.moveTo(-31, 63);
+  ctx.quadraticCurveTo(0, 74, 31, 63);
+  ctx.lineTo(28, 76);
+  ctx.quadraticCurveTo(0, 94, -28, 76);
+  ctx.closePath();
+  ctx.fill();
+
+  // Support (left) hand: its heel presses on the left side of the grip
+  let g = ctx.createLinearGradient(-60, 0, -10, 0);
+  g.addColorStop(0, HAND_SHADE);
+  g.addColorStop(1, HAND_COLOR);
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.moveTo(-24, 88);
+  ctx.bezierCurveTo(-44, 86, -60, 104, -60, 128);
+  ctx.bezierCurveTo(-60, 150, -54, 164, -52, 172);
+  ctx.lineTo(-10, 174);
+  ctx.bezierCurveTo(-18, 150, -24, 120, -24, 88);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(60,30,15,0.35)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  // Strong (right) hand: the web sits high under the beavertail
+  g = ctx.createLinearGradient(-30, 0, 52, 0);
+  g.addColorStop(0, HAND_LIGHT);
+  g.addColorStop(0.55, HAND_COLOR);
+  g.addColorStop(1, HAND_SHADE);
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.moveTo(-28, 80);
+  ctx.quadraticCurveTo(0, 98, 28, 78);           // web of the hand
+  ctx.bezierCurveTo(44, 84, 52, 104, 50, 126);   // back of the hand
+  ctx.bezierCurveTo(48, 146, 42, 158, 38, 168);  // down to the wrist
+  ctx.lineTo(-8, 170);
+  ctx.bezierCurveTo(-22, 150, -32, 118, -28, 80);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(90,50,25,0.18)';      // a soft tendon line
+  ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(10, 100); ctx.quadraticCurveTo(24, 130, 22, 160); ctx.stroke();
+
+  // Thumbs: both point forward along the left side of the frame
+  for (const [cx, cy, rx, ry, rot] of [[-44, 90, 11, 14, 0.5], [-36, 70, 10, 15, 0.35]]) {
+    skin(cx, cy, rx, ry, rot, false);
+    ctx.fillStyle = 'rgba(255,228,214,0.55)';    // thumbnail
+    ctx.beginPath();
+    ctx.ellipse(cx + 2, cy - ry * 0.45, rx * 0.55, ry * 0.32, rot, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.restore();
+}
+
+function ejectBrass() {
+  brass.push({
+    x: gun.x + 40, y: gun.y - 10,
+    vx: 4 + Math.random() * 3, vy: -9 - Math.random() * 3,
+    rot: 0, spin: 0.35 + Math.random() * 0.3,
+    born: performance.now(),
+  });
+}
+
+function drawBrass(now) {
+  brass = brass.filter(b => now - b.born < 1500 && b.y < H + 20);
+  for (const b of brass) {
+    b.vy += 0.6;                 // gravity
+    b.x += b.vx;
+    b.y += b.vy;
+    b.rot += b.spin;
+    ctx.save();
+    ctx.translate(b.x, b.y);
+    ctx.rotate(b.rot);
+    ctx.fillStyle = '#d6a637';
+    ctx.fillRect(-3, -7, 6, 14);
+    ctx.fillStyle = '#f5d67e';   // shine
+    ctx.fillRect(-3, -7, 2, 14);
+    ctx.fillStyle = '#8a6420';   // rim
+    ctx.fillRect(-3, 5, 6, 2);
+    ctx.restore();
+  }
+}
+
+
+/* ---------------------------------------------------------------------
    9. THE GAME LOOP: redraw everything, about 60 times a second
    --------------------------------------------------------------------- */
 function loop(now) {
@@ -715,6 +958,9 @@ function loop(now) {
   stage.noShoots.forEach(ns => drawTarget(ns, true));   // in front of the targets
   drawHoles();
   drawPopups(now);
+  updateGun();
+  drawBrass(now);
+  drawGun();
 
   if (flash > 0.01) {                           // muzzle flash
     ctx.fillStyle = `rgba(255,215,150,${flash * 0.14})`;
