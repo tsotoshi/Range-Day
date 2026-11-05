@@ -24,11 +24,7 @@ const MIN_DELAY = 1.5;         // shortest wait (seconds) before the beep
 const MAX_DELAY = 3.5;         // longest wait (seconds) before the beep
 
 // The 2011 pistol at the bottom of the screen
-const GUN_SIZE   = 1.6;        // make the gun bigger or smaller
-const HAND_COLOR = '#c8926c';  // skin tone of the hands
-const HAND_LIGHT = '#dcaa86';  // highlight
-const HAND_SHADE = '#9c6b4b';  // shadow
-const SLEEVE_COLOR = '#2c3440'; // shirt sleeves
+const GUN_SIZE   = 1.3;        // make the gun bigger or smaller
 const HAS_OPTIC  = true;       // true = red dot optic, false = iron sights
 const DOT_COLOR  = '#ff2a2a';  // colour of the dot (try '#33ff66' for green)
 
@@ -745,8 +741,10 @@ let brass = [];                               // flying empty cases
 
 function updateGun() {
   // Follow the aim, a little behind it so the gun feels heavy.
-  const aimY = Math.min(Math.max(mouse.y + 170, 440), 560);
-  gun.x += (mouse.x - gun.x) * 0.3;
+  const aimY = Math.min(Math.max(mouse.y + 120, 380), 500);
+  // Place the gun so its muzzle sits just below your aim point.
+  const muzzle = P(0, 1.2, 6);
+  gun.x += (mouse.x - muzzle[0] * GUN_SIZE * 0.85 - gun.x) * 0.3;
   gun.y += (aimY - gun.y) * 0.3;
   gun.kick *= 0.82;
 }
@@ -768,18 +766,38 @@ function roundRect(x, y, w, h, r) {
   ctx.closePath();
 }
 
-// A rounded, softly shaded shape for hands and thumbs.
-function skin(cx, cy, rx, ry, rotation, dark) {
-  const g = ctx.createRadialGradient(cx - rx * 0.3, cy - ry * 0.4, 2, cx, cy, Math.max(rx, ry));
-  g.addColorStop(0, HAND_LIGHT);
-  g.addColorStop(1, dark ? HAND_SHADE : HAND_COLOR);
-  ctx.fillStyle = g;
-  ctx.beginPath();
-  ctx.ellipse(cx, cy, rx, ry, rotation, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.strokeStyle = 'rgba(60,30,15,0.35)';
-  ctx.lineWidth = 1;
-  ctx.stroke();
+// ---- A tiny 3D camera ---------------------------------------------------
+// The gun is described in real inches: x = right, y = up, z = forward
+// (toward the targets). (0, 0, 0) is the bottom of the slide at its back
+// end. P() turns one of those 3D points into a 2D point on the screen, the
+// way a camera would: things further away look smaller and closer to the
+// middle. Your eye is a little behind, above and to the left of the gun.
+// focal sets how big the gun looks.
+const EYE = { x: -10, y: 5, z: -18, focal: 1100 };
+function rawP(x, y, z) {
+  const dz = z - EYE.z;
+  return [((x - EYE.x) * EYE.focal) / dz, (-(y - EYE.y) * EYE.focal) / dz];
+}
+function P(x, y, z) {
+  const [sx, sy] = rawP(x, y, z);
+  const [ax, ay] = rawP(0, 1.2, 0);          // keep the back of the slide at (0, 8)
+  return [sx - ax, sy - ay + 8];
+}
+const pxPerInch = z => EYE.focal / (z - EYE.z);  // how big 1 inch looks at depth z
+
+// Draw a box: its left side, top and back (the three faces you can see).
+function box(x0, x1, y0, y1, z0, z1, left, top, back) {
+  ctx.fillStyle = left;
+  fillPoly([P(x0, y0, z0), P(x0, y1, z0), P(x0, y1, z1), P(x0, y0, z1)]);
+  ctx.fillStyle = top;
+  fillPoly([P(x0, y1, z0), P(x1, y1, z0), P(x1, y1, z1), P(x0, y1, z1)]);
+  ctx.fillStyle = back;
+  fillPoly([P(x0, y0, z0), P(x1, y0, z0), P(x1, y1, z0), P(x0, y1, z0)]);
+}
+
+function line3(a, b) {
+  const A = P(...a), B = P(...b);
+  ctx.beginPath(); ctx.moveTo(A[0], A[1]); ctx.lineTo(B[0], B[1]); ctx.stroke();
 }
 
 function drawGun() {
@@ -788,187 +806,104 @@ function drawGun() {
   ctx.rotate(((gun.x - W / 2) / W) * 0.12 - gun.kick * 0.08);          // slight tilt
   ctx.scale(GUN_SIZE, GUN_SIZE);
 
-  // Muzzle flash, out past the front of the gun (drawn first, so it's behind)
+  // Muzzle flash at the front of the gun (drawn first, so the gun covers its base)
   if (gun.kick > 0.55) {
     const f = 0.6 + 0.4 * (gun.kick - 0.55) / 0.45;
-    const g = ctx.createRadialGradient(0, -28, 0, 0, -28, 80 * f);
+    const [mx, my] = P(0, 0.6, 6.4);
+    const g = ctx.createRadialGradient(mx, my, 0, mx, my, 80 * f);
     g.addColorStop(0, 'rgba(255,255,230,0.95)');
     g.addColorStop(0.3, 'rgba(255,200,90,0.8)');
     g.addColorStop(1, 'rgba(255,120,20,0)');
     ctx.fillStyle = g;
     ctx.beginPath();
-    ctx.ellipse(0, -40, 50 * f, 85 * f, 0, 0, Math.PI * 2);
+    ctx.ellipse(mx, my - 20 * f, 50 * f, 80 * f, 0, 0, Math.PI * 2);
     ctx.fill();
   }
 
-  // Forearms reaching down to the bottom corners, with shirt sleeves
-  for (const arm of [
-    [[-56, 160], [-12, 170], [-80, 440], [-270, 440]],    // left arm
-    [[-8, 166], [40, 158], [240, 440], [50, 440]],        // right arm
-  ]) {
-    const g = ctx.createLinearGradient(0, 160, 0, 360);
-    g.addColorStop(0, HAND_COLOR);
-    g.addColorStop(1, HAND_SHADE);
-    ctx.fillStyle = g;
-    fillPoly(arm);
-    ctx.save();
-    ctx.beginPath();
-    arm.forEach(([x, y], i) => (i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)));
-    ctx.clip();
-    ctx.fillStyle = SLEEVE_COLOR;
-    ctx.fillRect(-400, 330, 800, 200);
-    ctx.restore();
-  }
-
-  // Slide: the top surface catches the light, the back face is darker
-  ctx.fillStyle = '#4b4e54';
-  fillPoly([[-27, 2], [27, 2], [31, 9], [-31, 9]]);
-  const steel = ctx.createLinearGradient(0, 8, 0, 60);
-  steel.addColorStop(0, '#35383d');
-  steel.addColorStop(1, '#18191c');
-  ctx.fillStyle = steel;
-  roundRect(-31, 8, 62, 52, 5);
-  ctx.fill();
-  ctx.strokeStyle = 'rgba(255,255,255,0.06)';                           // rear serrations
-  ctx.lineWidth = 1;
-  for (let y = 14; y < 56; y += 3.5) {
-    ctx.beginPath(); ctx.moveTo(-26, y); ctx.lineTo(26, y); ctx.stroke();
-  }
-  ctx.fillStyle = '#2a2c30';                                             // firing-pin stop
-  roundRect(-8, 22, 16, 28, 3);
-  ctx.fill();
-
-  if (HAS_OPTIC) {
-    drawOptic();
-  } else {
-    // Front sight (far away, seen through the rear notch) with a red fiber-optic dot
-    ctx.fillStyle = '#101112';
-    ctx.fillRect(-3, -6, 6, 10);
-    ctx.save();
-    ctx.shadowColor = '#ff2a2a';
-    ctx.shadowBlur = 8;
-    ctx.fillStyle = '#ff4a3a';
-    circle(0, -3, 2.3);
-    ctx.restore();
-
-    // Rear sight: a black block with a square notch
-    ctx.fillStyle = '#0d0e0f';
-    fillPoly([[-23, -6], [-5.5, -6], [-5.5, 4], [5.5, 4], [5.5, -6], [23, -6], [24, 10], [-24, 10]]);
-
-  }
-
-  // Frame under the slide, cocked hammer, and the big 2011 beavertail
-  ctx.fillStyle = '#1f2023';
-  ctx.fillRect(-26, 58, 52, 12);
-  ctx.fillStyle = '#3c3f44';
-  roundRect(-7, 48, 14, 16, 3);
-  ctx.fill();
-  ctx.fillStyle = '#1a1b1e';
-  circle(0, 54, 2.6);
-  const bt = ctx.createLinearGradient(0, 62, 0, 90);
-  bt.addColorStop(0, '#5a5d63');
-  bt.addColorStop(1, '#2a2b2f');
-  ctx.fillStyle = bt;
+  // Frame: the dust cover under the slide, and the grip
+  box(-0.5, 0.5, -0.6, 0, 0, 5.9, '#2b2e32', '#2b2e32', '#212326');
+  box(-0.6, 0.6, -5.2, -0.6, -0.2, 1.7, '#26282c', '#26282c', '#1c1e21');   // grip
+  ctx.strokeStyle = 'rgba(255,255,255,0.05)';                               // grip texture
+  for (let y = -1.0; y > -5.0; y -= 0.25) line3([-0.6, y, -0.1], [-0.6, y, 1.6]);
+  box(-0.75, 0.75, -6.0, -5.2, -0.4, 1.9, '#2e3035', '#3a3d42', '#232529');  // magwell
+  ctx.strokeStyle = '#1c1e21';                                         // trigger guard
+  ctx.lineWidth = 0.22 * pxPerInch(2.4);
   ctx.beginPath();
-  ctx.moveTo(-31, 63);
-  ctx.quadraticCurveTo(0, 74, 31, 63);
-  ctx.lineTo(28, 76);
-  ctx.quadraticCurveTo(0, 94, -28, 76);
-  ctx.closePath();
-  ctx.fill();
-
-  // Support (left) hand: its heel presses on the left side of the grip
-  let g = ctx.createLinearGradient(-60, 0, -10, 0);
-  g.addColorStop(0, HAND_SHADE);
-  g.addColorStop(1, HAND_COLOR);
-  ctx.fillStyle = g;
-  ctx.beginPath();
-  ctx.moveTo(-24, 88);
-  ctx.bezierCurveTo(-44, 86, -60, 104, -60, 128);
-  ctx.bezierCurveTo(-60, 150, -54, 164, -52, 172);
-  ctx.lineTo(-10, 174);
-  ctx.bezierCurveTo(-18, 150, -24, 120, -24, 88);
-  ctx.closePath();
-  ctx.fill();
-  ctx.strokeStyle = 'rgba(60,30,15,0.35)';
-  ctx.lineWidth = 1;
+  for (const [i, [y, z]] of [[-0.6, 1.7], [-1.7, 1.9], [-1.9, 2.7], [-0.6, 3.0]].entries()) {
+    const [sx, sy] = P(-0.4, y, z);
+    if (i === 0) ctx.moveTo(sx, sy); else ctx.lineTo(sx, sy);
+  }
   ctx.stroke();
 
-  // Strong (right) hand: the web sits high under the beavertail
-  g = ctx.createLinearGradient(-30, 0, 52, 0);
-  g.addColorStop(0, HAND_LIGHT);
-  g.addColorStop(0.55, HAND_COLOR);
-  g.addColorStop(1, HAND_SHADE);
-  ctx.fillStyle = g;
-  ctx.beginPath();
-  ctx.moveTo(-28, 80);
-  ctx.quadraticCurveTo(0, 98, 28, 78);           // web of the hand
-  ctx.bezierCurveTo(44, 84, 52, 104, 50, 126);   // back of the hand
-  ctx.bezierCurveTo(48, 146, 42, 158, 38, 168);  // down to the wrist
-  ctx.lineTo(-8, 170);
-  ctx.bezierCurveTo(-22, 150, -32, 118, -28, 80);
-  ctx.closePath();
-  ctx.fill();
-  ctx.stroke();
-  ctx.strokeStyle = 'rgba(90,50,25,0.18)';      // a soft tendon line
-  ctx.lineWidth = 2;
-  ctx.beginPath(); ctx.moveTo(10, 100); ctx.quadraticCurveTo(24, 130, 22, 160); ctx.stroke();
+  // Front sight near the muzzle
+  box(-0.06, 0.06, 1.2, 1.45, 5.6, 5.8, '#101112', '#1a1b1d', '#0c0d0e');
 
-  // Thumbs: both point forward along the left side of the frame
-  for (const [cx, cy, rx, ry, rot] of [[-44, 90, 11, 14, 0.5], [-36, 70, 10, 15, 0.35]]) {
-    skin(cx, cy, rx, ry, rot, false);
-    ctx.fillStyle = 'rgba(255,228,214,0.55)';    // thumbnail
-    ctx.beginPath();
-    ctx.ellipse(cx + 2, cy - ry * 0.45, rx * 0.55, ry * 0.32, rot, 0, Math.PI * 2);
-    ctx.fill();
-  }
+  // Slide, with cocking serrations on the side and back
+  box(-0.47, 0.47, 0, 1.2, 0, 6.0, '#3a3d43', '#4c5056', '#2b2e33');
+  ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+  ctx.lineWidth = 1;
+  for (let z = 0.25; z < 1.3; z += 0.12) line3([-0.47, 0.15, z], [-0.47, 1.05, z]);
+  ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+  for (let y = 0.12; y < 1.15; y += 0.07) line3([-0.42, y, 0], [0.42, y, 0]);
+  ctx.fillStyle = '#25272b';                                           // firing-pin stop
+  fillPoly([P(-0.13, 0.1, 0), P(0.13, 0.1, 0), P(0.13, 0.75, 0), P(-0.13, 0.75, 0)]);
+
+  // Sights on top of the slide
+  if (HAS_OPTIC) drawOptic();
+  else box(-0.4, 0.4, 1.2, 1.5, 0.05, 0.45, '#141517', '#1c1d20', '#0e0f10');  // rear sight
+
+  // Cocked hammer and the big 2011 beavertail
+  box(-0.12, 0.12, 0.02, 0.32, -0.22, 0, '#34373c', '#44474d', '#26282c');
+  box(-0.42, 0.42, -0.46, -0.34, -0.42, 0, '#2c2e33', '#3c3f45', '#232529');
 
   ctx.restore();
 }
 
-// A red dot optic on the back of the slide, seen from behind.
+// A red dot optic on the back of the slide.
 function drawOptic() {
-  // Mounting plate on the slide
-  ctx.fillStyle = '#141517';
-  ctx.fillRect(-24, 1, 48, 8);
+  const x0 = -0.48, x1 = 0.48, y0 = 1.2, y1 = 2.15, z0 = 0.2, z1 = 1.7;
+  ctx.fillStyle = '#25272b';                                           // left side
+  fillPoly([P(x0, y0, z0), P(x0, y1, z0), P(x0, y1, z1), P(x0, y0, z1)]);
+  ctx.fillStyle = '#34373c';                                           // top
+  fillPoly([P(x0, y1, z0), P(x1, y1, z0), P(x1, y1, z1), P(x0, y1, z1)]);
+  ctx.fillStyle = '#2c2e33';                                           // button on the side
+  fillPoly([P(x0 - 0.02, 1.55, 0.6), P(x0 - 0.02, 1.8, 0.6), P(x0 - 0.02, 1.8, 0.9), P(x0 - 0.02, 1.55, 0.9)]);
 
-  // Housing with a window cut out of it ("evenodd" leaves the hole empty)
-  const body = ctx.createLinearGradient(0, -42, 0, 8);
+  // Back face with the window cut out ("evenodd" leaves the hole empty)
+  const wx = 0.36, wy0 = 1.32, wy1 = 2.03;
+  const outer = [P(x0, y0, z0), P(x1, y0, z0), P(x1, y1, z0), P(x0, y1, z0)];
+  const inner = [P(-wx, wy0, z0), P(-wx, wy1, z0), P(wx, wy1, z0), P(wx, wy0, z0)];
+  ctx.beginPath();
+  [outer, inner].forEach(shape => {
+    shape.forEach(([x, y], i) => (i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)));
+    ctx.closePath();
+  });
+  const body = ctx.createLinearGradient(0, outer[2][1], 0, outer[0][1]);
   body.addColorStop(0, '#3a3d42');
-  body.addColorStop(1, '#141517');
+  body.addColorStop(1, '#16171a');
   ctx.fillStyle = body;
-  roundRect(-26, -42, 52, 50, 7);
-  ctx.moveTo(-19, -35);
-  ctx.lineTo(-19, -3);
-  ctx.lineTo(19, -3);
-  ctx.lineTo(19, -35);
-  ctx.closePath();
   ctx.fill('evenodd');
 
-  // Adjustment buttons on the side
-  ctx.fillStyle = '#2a2c30';
-  roundRect(25, -28, 4, 12, 1.5);
-  ctx.fill();
-
-  // Tinted glass and a soft reflection
-  ctx.fillStyle = 'rgba(120,170,210,0.16)';
-  ctx.fillRect(-19, -35, 38, 32);
+  // Tinted glass, a reflection, and the glowing dot
   ctx.save();
   ctx.beginPath();
-  ctx.rect(-19, -35, 38, 32);
+  inner.forEach(([x, y], i) => (i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)));
+  ctx.closePath();
   ctx.clip();
+  ctx.fillStyle = 'rgba(120,170,210,0.16)';
+  ctx.fill();
+  const [lx, ly] = inner[0], [rx, ry] = inner[2];
   ctx.fillStyle = 'rgba(255,255,255,0.10)';
-  fillPoly([[-19, -20], [-4, -35], [6, -35], [-19, -10]]);
+  fillPoly([[lx, ly - (ly - ry) * 0.5], [lx + (rx - lx) * 0.35, ry], [lx + (rx - lx) * 0.6, ry], [lx, ly - (ly - ry) * 0.15]]);
   ctx.restore();
-
-  // The glowing dot
+  const [dx, dy] = P(0, (wy0 + wy1) / 2, z0);
   ctx.save();
   ctx.shadowColor = DOT_COLOR;
   ctx.shadowBlur = 10;
   ctx.fillStyle = DOT_COLOR;
-  circle(0, -19, 2.2);
+  circle(dx, dy, 2.2);
   ctx.fillStyle = 'rgba(255,255,255,0.8)';
-  circle(0, -19, 0.9);
+  circle(dx, dy, 0.9);
   ctx.restore();
 }
 
