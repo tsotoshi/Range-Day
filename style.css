@@ -166,3 +166,51 @@ td { padding: 6px 4px; border-top: 1px solid var(--line); }
 .best.new { color: var(--accent); font-weight: 700; }
 
 .footer { color: var(--muted); font-size: 12px; margin-top: 12px; }
+
+/* ---------- Phones and small screens ----------
+   "@media" means: only use these rules when the screen matches.
+   Here the start/results screens cover the whole phone so nothing is cut off. */
+.rotate-hint { display: none; }
+
+@media (max-width: 700px), (max-height: 500px) {
+  .overlay { position: fixed; z-index: 20; }
+  .panel { padding: 20px; }
+  h1 { font-size: 28px; }
+  .hf span { font-size: 40px; }
+  .stats { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (orientation: portrait) and (max-width: 700px) {
+  .rotate-hint {
+    display: block;
+    color: var(--accent);
+    font-weight: 700;
+    font-size: 14px;
+    margin: 12px 0 0;
+    text-align: center;
+  }
+}
+
+/* Short screens (a phone held sideways): tighten the panel so Start stays visible */
+@media (max-height: 500px) {
+  .panel { padding: 14px 20px; }
+  h1 { font-size: 24px; margin-bottom: 4px; }
+  h2 { font-size: 20px; margin-bottom: 4px; }
+  .lead { font-size: 14px; margin-bottom: 6px; }
+  .rules { font-size: 13px; line-height: 1.45; margin-bottom: 8px; }
+  .small { margin: 6px 0 10px; }
+  button { padding: 10px 36px; font-size: 16px; }
+  .hf { margin: 0 0 8px; }
+  .stats { grid-template-columns: repeat(4, 1fr); margin-bottom: 8px; }
+  td { padding: 3px 4px; }
+  .best { margin-bottom: 10px; }
+}
+@media (max-height: 500px) {
+  .hf span { font-size: 30px; }
+  .stat { padding: 4px; }
+  .stat span { font-size: 16px; }
+  table { font-size: 13px; margin-bottom: 6px; }
+  td { padding: 1px 4px; }
+  .chip { width: 20px; height: 20px; font-size: 11px; }
+  .best { font-size: 13px; margin-bottom: 8px; }
+}
