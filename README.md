@@ -42,6 +42,10 @@ You don't need to install anything or connect to the internet.
   change its name and positions, then add a matching button in `index.html`.
 - In `style.css`, change `--accent: #ff7a1a;` to another colour.
 
+When you change `style.css` or `game.js`, also bump the version number in
+`index.html` (`style.css?v=5` → `?v=6`, and the same for `game.js`). Otherwise
+browsers may keep using their old saved copy for a few minutes.
+
 If something breaks, undo your change (⌘ + Z) and save again. To see error messages,
 right-click the page, choose **Inspect**, then open the **Console** tab.
 
