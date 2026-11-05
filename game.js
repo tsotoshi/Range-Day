@@ -29,6 +29,8 @@ const HAND_COLOR = '#c8926c';  // skin tone of the hands
 const HAND_LIGHT = '#dcaa86';  // highlight
 const HAND_SHADE = '#9c6b4b';  // shadow
 const SLEEVE_COLOR = '#2c3440'; // shirt sleeves
+const HAS_OPTIC  = true;       // true = red dot optic, false = iron sights
+const DOT_COLOR  = '#ff2a2a';  // colour of the dot (try '#33ff66' for green)
 
 const NO_SHOOT_PENALTY = 10;   // points lost for each hit on a white no-shoot
 
@@ -836,19 +838,24 @@ function drawGun() {
   roundRect(-8, 22, 16, 28, 3);
   ctx.fill();
 
-  // Front sight (far away, seen through the rear notch) with a red fiber-optic dot
-  ctx.fillStyle = '#101112';
-  ctx.fillRect(-3, -6, 6, 10);
-  ctx.save();
-  ctx.shadowColor = '#ff2a2a';
-  ctx.shadowBlur = 8;
-  ctx.fillStyle = '#ff4a3a';
-  circle(0, -3, 2.3);
-  ctx.restore();
+  if (HAS_OPTIC) {
+    drawOptic();
+  } else {
+    // Front sight (far away, seen through the rear notch) with a red fiber-optic dot
+    ctx.fillStyle = '#101112';
+    ctx.fillRect(-3, -6, 6, 10);
+    ctx.save();
+    ctx.shadowColor = '#ff2a2a';
+    ctx.shadowBlur = 8;
+    ctx.fillStyle = '#ff4a3a';
+    circle(0, -3, 2.3);
+    ctx.restore();
 
-  // Rear sight: a black block with a square notch
-  ctx.fillStyle = '#0d0e0f';
-  fillPoly([[-23, -6], [-5.5, -6], [-5.5, 4], [5.5, 4], [5.5, -6], [23, -6], [24, 10], [-24, 10]]);
+    // Rear sight: a black block with a square notch
+    ctx.fillStyle = '#0d0e0f';
+    fillPoly([[-23, -6], [-5.5, -6], [-5.5, 4], [5.5, 4], [5.5, -6], [23, -6], [24, 10], [-24, 10]]);
+
+  }
 
   // Frame under the slide, cocked hammer, and the big 2011 beavertail
   ctx.fillStyle = '#1f2023';
@@ -916,6 +923,52 @@ function drawGun() {
     ctx.fill();
   }
 
+  ctx.restore();
+}
+
+// A red dot optic on the back of the slide, seen from behind.
+function drawOptic() {
+  // Mounting plate on the slide
+  ctx.fillStyle = '#141517';
+  ctx.fillRect(-24, 1, 48, 8);
+
+  // Housing with a window cut out of it ("evenodd" leaves the hole empty)
+  const body = ctx.createLinearGradient(0, -42, 0, 8);
+  body.addColorStop(0, '#3a3d42');
+  body.addColorStop(1, '#141517');
+  ctx.fillStyle = body;
+  roundRect(-26, -42, 52, 50, 7);
+  ctx.moveTo(-19, -35);
+  ctx.lineTo(-19, -3);
+  ctx.lineTo(19, -3);
+  ctx.lineTo(19, -35);
+  ctx.closePath();
+  ctx.fill('evenodd');
+
+  // Adjustment buttons on the side
+  ctx.fillStyle = '#2a2c30';
+  roundRect(25, -28, 4, 12, 1.5);
+  ctx.fill();
+
+  // Tinted glass and a soft reflection
+  ctx.fillStyle = 'rgba(120,170,210,0.16)';
+  ctx.fillRect(-19, -35, 38, 32);
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(-19, -35, 38, 32);
+  ctx.clip();
+  ctx.fillStyle = 'rgba(255,255,255,0.10)';
+  fillPoly([[-19, -20], [-4, -35], [6, -35], [-19, -10]]);
+  ctx.restore();
+
+  // The glowing dot
+  ctx.save();
+  ctx.shadowColor = DOT_COLOR;
+  ctx.shadowBlur = 10;
+  ctx.fillStyle = DOT_COLOR;
+  circle(0, -19, 2.2);
+  ctx.fillStyle = 'rgba(255,255,255,0.8)';
+  circle(0, -19, 0.9);
   ctx.restore();
 }
 
