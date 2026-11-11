@@ -9,9 +9,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Range Day</title>
-  <!-- The ?v=10 is a version number. Bump it on every update so browsers
+  <!-- The ?v=12 is a version number. Bump it on every update so browsers
        download the new files instead of using an old saved copy. -->
-  <link rel="stylesheet" href="style.css?v=10">
+  <link rel="stylesheet" href="style.css?v=12">
 </head>
 <body>
 
@@ -54,6 +54,24 @@
           <button data-stage="1">Stage 2<small>No-Shoot</small></button>
           <button data-stage="2">Stage 3<small>Tuxedo · Small</small></button>
         </div>
+        <!-- Only shown when the online leaderboard is set up in game.js -->
+        <button id="boards-btn" class="link-btn hidden">🏆 Leaderboards</button>
+      </div>
+    </div>
+
+    <!-- Online leaderboards screen (opened from the start screen) -->
+    <div id="board-screen" class="overlay hidden">
+      <div class="panel">
+        <h2>Leaderboards</h2>
+        <div class="buttons board-tabs">
+          <button data-board="0">Stage 1</button>
+          <button data-board="1" class="secondary">Stage 2</button>
+          <button data-board="2" class="secondary">Stage 3</button>
+        </div>
+        <div id="board-list"></div>
+        <div class="buttons">
+          <button id="board-back-btn" class="secondary">Back</button>
+        </div>
       </div>
     </div>
 
@@ -62,6 +80,16 @@
       <div class="panel">
         <h2>Stage Complete</h2>
         <div id="results"></div>
+
+        <!-- Online leaderboard (hidden unless it's set up in game.js) -->
+        <form id="submit-form" class="submit-form hidden">
+          <input id="player-name" type="text" maxlength="16" placeholder="Your name"
+                 autocomplete="nickname" aria-label="Your name for the leaderboard">
+          <button id="submit-btn" type="submit">Post score</button>
+        </form>
+        <p id="submit-status" class="board-note"></p>
+        <div id="leaderboard" class="hidden"></div>
+
         <div class="buttons">
           <button id="restart-btn">Restart</button>
           <button id="menu-btn" class="secondary">Change Stage</button>
@@ -72,8 +100,8 @@
 
   <p class="rotate-hint">↻ Turn your phone sideways for a bigger range.</p>
 
-  <p class="footer">Tip: turn your sound on. Works with a mouse or a finger tap. · Version 10</p>
+  <p class="footer">Tip: turn your sound on. Works with a mouse or a finger tap. · Version 12</p>
 
-  <script src="game.js?v=10"></script>
+  <script src="game.js?v=12"></script>
 </body>
 </html>

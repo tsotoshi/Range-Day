@@ -62,3 +62,25 @@ right-click the page, choose **Inspect**, then open the **Console** tab.
   and painted as a tuxedo with `tuxedo: true`
 - Time runs from the beep to your last shot
 - **Hit factor = (points − penalties) ÷ time**. Higher is better. Each stage's best is saved in this browser.
+
+## Online leaderboard (optional)
+
+Players can post their hit factor to a shared top-10 list for each stage. The scores
+live in a free **Supabase** database, because GitHub Pages can't store data.
+Until you fill in the two keys below, the leaderboard stays hidden and the game works as before.
+
+**Where it lives now:** the Supabase project **games** (shared with my other games),
+in the table **`range_scores`**. The URL and publishable key are already in `game.js`.
+The steps below are only needed if you ever move it to a new project.
+
+1. Sign up at [supabase.com](https://supabase.com) and create a new project (the free plan is fine).
+2. Open **SQL Editor → New query**, paste everything from `supabase-setup.sql`, and click **Run**.
+   This creates the `scores` table and locks it so the public can only *read* and *add* scores.
+3. Open **Project Settings → API**. Copy the **Project URL** and the **anon public** key.
+4. Paste them into `LEADERBOARD_URL` and `LEADERBOARD_KEY` near the top of `game.js`.
+   The anon key is designed to be public, so it's fine for it to be on GitHub.
+5. Bump the version number, then save, commit and push.
+
+To remove a fake or rude score, delete its row in Supabase's **Table Editor**.
+Scores are sent from the player's browser, so a determined cheater could post a fake
+one. The database rejects impossible numbers (hit factor over 40, time under 0.3 s).

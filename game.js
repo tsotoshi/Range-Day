@@ -30,6 +30,12 @@ const DOT_COLOR  = '#ff2a2a';  // colour of the dot (try '#33ff66' for green)
 
 const NO_SHOOT_PENALTY = 10;   // points lost for each hit on a white no-shoot
 
+// Online leaderboard (Supabase). Paste your Project URL and "anon public"
+// key here (Supabase → Project Settings → API). Leave them as '' to turn
+// the leaderboard off — the game works fine without it.
+const LEADERBOARD_URL = 'https://gfybimpuyzbwxhxhikpt.supabase.co';
+const LEADERBOARD_KEY = 'sb_publishable_KIsjKLERCZHNllKXuOn1Uw_Ef9f3ADB';  // public by design
+
 // The stages. Each one lists where its targets stand (x = left/right,
 // y = up/down, in pixels) and any white no-shoot targets you must NOT hit.
 // To make a new stage, copy one of these blocks and change the numbers.
@@ -93,6 +99,13 @@ const messageEl     = document.getElementById('message');
 const startScreen   = document.getElementById('start-screen');
 const resultsScreen = document.getElementById('results-screen');
 const resultsEl     = document.getElementById('results');
+const submitForm    = document.getElementById('submit-form');
+const nameInput     = document.getElementById('player-name');
+const submitBtn     = document.getElementById('submit-btn');
+const submitStatus  = document.getElementById('submit-status');
+const leaderboardEl = document.getElementById('leaderboard');
+const boardScreen   = document.getElementById('board-screen');
+const boardListEl   = document.getElementById('board-list');
 
 // Make drawings sharp on Retina (MacBook) screens.
 const dpr = window.devicePixelRatio || 1;
@@ -307,6 +320,122 @@ function showResults() {
   document.querySelector('#results-screen h2').textContent = `${stage.name} Complete`;
   resultsScreen.classList.remove('hidden');
   playBeep(0.15, 1200);
+
+  // Remember this run so it can be sent to the online leaderboard.
+  lastResult = {
+    stage: stageIndex,
+    hit_factor: Math.round(hitFactor * 10000) / 10000,
+    score, penalties,
+    time: Math.round(finalTime * 100) / 100,
+  };
+  prepareLeaderboard();
+}
+
+
+/* ---------------------------------------------------------------------
+   6b. ONLINE LEADERBOARD
+   Scores are stored in a free Supabase database. We talk to it with
+   plain fetch() calls. If it's not set up, or the internet is down,
+   the game just carries on without it.
+   --------------------------------------------------------------------- */
+const leaderboardOn = !!(LEADERBOARD_URL && LEADERBOARD_KEY);
+let lastResult = null;     // the run shown on the results screen
+let submitted = false;     // stops the same run being sent twice
+
+function apiHeaders() {
+  return {
+    apikey: LEADERBOARD_KEY,
+    Authorization: `Bearer ${LEADERBOARD_KEY}`,
+    'Content-Type': 'application/json',
+  };
+}
+
+// Top 10 scores for one stage, best hit factor first.
+async function fetchLeaderboard(stageNum) {
+  const url = `${LEADERBOARD_URL}/rest/v1/range_scores?select=id,name,hit_factor,time` +
+              `&stage=eq.${stageNum}&order=hit_factor.desc,created_at.asc&limit=10`;
+  const res = await fetch(url, { headers: apiHeaders() });
+  if (!res.ok) throw new Error(`Leaderboard error ${res.status}`);
+  return res.json();
+}
+
+// Send one run. Returns the new row (so we can highlight it).
+async function submitScore(name, result) {
+  const res = await fetch(`${LEADERBOARD_URL}/rest/v1/range_scores`, {
+    method: 'POST',
+    headers: { ...apiHeaders(), Prefer: 'return=representation' },
+    body: JSON.stringify({ name, ...result }),
+  });
+  if (!res.ok) throw new Error(`Submit error ${res.status}`);
+  return (await res.json())[0];
+}
+
+// Stops names like "<script>" from turning into real HTML.
+function escapeHtml(text) {
+  return String(text).replace(/[&<>"']/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function renderLeaderboard(rows, highlightId) {
+  if (!rows.length) return '<p class="board-note">No scores yet. Be the first!</p>';
+  const body = rows.map((r, i) => `
+    <tr class="${r.id === highlightId ? 'me' : ''}">
+      <td>${i + 1}</td><td class="board-name">${escapeHtml(r.name)}</td>
+      <td>${Number(r.hit_factor).toFixed(4)}</td><td>${Number(r.time).toFixed(2)}s</td>
+    </tr>`).join('');
+  return `<table class="board"><tr><th>#</th><th>SHOOTER</th><th>HF</th><th>TIME</th></tr>${body}</table>`;
+}
+
+// Fill an element with a stage's top 10 (or an "offline" note).
+async function loadBoardInto(el, stageNum, highlightId) {
+  el.innerHTML = '<p class="board-note">Loading leaderboard…</p>';
+  try {
+    el.innerHTML = renderLeaderboard(await fetchLeaderboard(stageNum), highlightId);
+  } catch (e) {
+    el.innerHTML = '<p class="board-note">Leaderboard offline.</p>';
+  }
+}
+
+// Called each time the results screen opens.
+function prepareLeaderboard() {
+  if (!leaderboardOn) return;
+  submitted = false;
+  submitStatus.textContent = '';
+  const canSubmit = lastResult.hit_factor > 0;
+  submitForm.classList.toggle('hidden', !canSubmit);
+  submitBtn.disabled = !canSubmit;
+  leaderboardEl.classList.remove('hidden');
+  loadBoardInto(leaderboardEl, lastResult.stage);
+}
+
+async function handleSubmit(e) {
+  e.preventDefault();
+  if (submitted || !lastResult) return;
+  const name = nameInput.value.trim().slice(0, 16);
+  if (!name) { submitStatus.textContent = 'Type a name first.'; nameInput.focus(); return; }
+  try { localStorage.setItem('rangeDayName', name); } catch (err) {}
+
+  submitted = true;
+  submitBtn.disabled = true;
+  submitStatus.textContent = 'Sending…';
+  try {
+    const row = await submitScore(name, lastResult);
+    submitStatus.textContent = 'Score posted!';
+    loadBoardInto(leaderboardEl, lastResult.stage, row && row.id);
+  } catch (err) {
+    submitted = false;
+    submitBtn.disabled = false;
+    submitStatus.textContent = 'Could not reach the leaderboard. Try again.';
+  }
+}
+
+// The "Leaderboards" screen reached from the start menu.
+function showBoardScreen(stageNum) {
+  startScreen.classList.add('hidden');
+  boardScreen.classList.remove('hidden');
+  document.querySelectorAll('[data-board]').forEach(b =>
+    b.classList.toggle('secondary', Number(b.dataset.board) !== stageNum));
+  loadBoardInto(boardListEl, stageNum);
 }
 
 
@@ -1000,6 +1129,20 @@ document.getElementById('menu-btn').addEventListener('click', () => {
   startScreen.classList.remove('hidden');
 });
 document.getElementById('restart-btn').addEventListener('click', startStage);
+
+// Online leaderboard buttons (hidden when the leaderboard isn't set up).
+if (leaderboardOn) {
+  try { nameInput.value = localStorage.getItem('rangeDayName') || ''; } catch (e) {}
+  submitForm.addEventListener('submit', handleSubmit);
+  document.getElementById('boards-btn').classList.remove('hidden');
+  document.getElementById('boards-btn').addEventListener('click', () => showBoardScreen(0));
+  document.querySelectorAll('[data-board]').forEach(btn =>
+    btn.addEventListener('click', () => showBoardScreen(Number(btn.dataset.board))));
+  document.getElementById('board-back-btn').addEventListener('click', () => {
+    boardScreen.classList.add('hidden');
+    startScreen.classList.remove('hidden');
+  });
+}
 
 resetStage();
 requestAnimationFrame(loop);
