@@ -106,6 +106,7 @@ const submitStatus  = document.getElementById('submit-status');
 const leaderboardEl = document.getElementById('leaderboard');
 const boardScreen   = document.getElementById('board-screen');
 const boardListEl   = document.getElementById('board-list');
+const resultsBtns   = document.getElementById('results-buttons');
 
 // Make drawings sharp on Retina (MacBook) screens.
 const dpr = window.devicePixelRatio || 1;
@@ -404,6 +405,13 @@ function prepareLeaderboard() {
   const canSubmit = lastResult.hit_factor > 0;
   submitForm.classList.toggle('hidden', !canSubmit);
   submitBtn.disabled = !canSubmit;
+  // Posting is required: Restart / Change Stage stay hidden until it's sent.
+  // (A zero hit factor can't be posted, so those runs skip straight past.)
+  resultsBtns.classList.toggle('hidden', canSubmit);
+  if (canSubmit) {
+    submitStatus.textContent = 'Post your score to continue.';
+    nameInput.focus();
+  }
   leaderboardEl.classList.remove('hidden');
   loadBoardInto(leaderboardEl, lastResult.stage);
 }
@@ -421,11 +429,14 @@ async function handleSubmit(e) {
   try {
     const row = await submitScore(name, lastResult);
     submitStatus.textContent = 'Score posted!';
+    submitForm.classList.add('hidden');
+    resultsBtns.classList.remove('hidden');
     loadBoardInto(leaderboardEl, lastResult.stage, row && row.id);
   } catch (err) {
     submitted = false;
     submitBtn.disabled = false;
-    submitStatus.textContent = 'Could not reach the leaderboard. Try again.';
+    submitStatus.textContent = 'Could not reach the leaderboard. Try again, or carry on.';
+    resultsBtns.classList.remove('hidden');   // never trap the player offline
   }
 }
 
